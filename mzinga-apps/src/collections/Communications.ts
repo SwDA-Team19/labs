@@ -25,14 +25,31 @@ const Communications: CollectionConfig = {
   admin: {
     ...collectionUtils.GeneratePreviewConfig(),
     useAsTitle: "subject",
-    defaultColumns: ["subject", "tos"],
+    defaultColumns: ["subject", "tos", "status"],
     group: "Notifications",
     disableDuplicate: true,
     enableRichTextRelationship: false,
   },
   hooks: {
     afterChange: [
-      async ({ doc }) => {
+      async ({ doc, operation }) => {
+        // --- Lab 1: Branch by Abstraction via feature flag ---
+        // When COMMUNICATIONS_EXTERNAL_WORKER=true the Python worker handles
+        // email sending.  The hook just marks the document pending and returns.
+        // Setting the flag to false (or leaving it unset) restores the original
+        // synchronous in-process behaviour so the change is fully reversible.
+        if (process.env.COMMUNICATIONS_EXTERNAL_WORKER === "true") {
+          if (operation === "create") {
+            await payload.update({
+              collection: Slugs.Communications,
+              id: doc.id,
+              data: { status: "pending" },
+            });
+          }
+          return doc;
+        }
+
+        // --- Original synchronous email-sending path (preserved intact) ---
         const { tos, ccs, bccs, subject, body } = doc;
         for (const part of body) {
           if (part.type !== "upload") {
@@ -211,6 +228,21 @@ const Communications: CollectionConfig = {
       name: "body",
       type: "richText",
       required: true,
+    },
+    // --- Lab 1 Step 3: delivery status written by the Python worker ---
+    {
+      name: "status",
+      type: "select",
+      options: [
+        { label: "Pending", value: "pending" },
+        { label: "Processing", value: "processing" },
+        { label: "Sent", value: "sent" },
+        { label: "Failed", value: "failed" },
+      ],
+      admin: {
+        readOnly: true,
+        position: "sidebar",
+      },
     },
   ],
 };
