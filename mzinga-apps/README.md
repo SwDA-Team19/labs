@@ -94,10 +94,8 @@ To run MZinga locally, you need to configure several environment variables. Thes
 | `DRIVER_OPTS_TYPE`                   | Docker volume driver type.                                               | none                                                                             | Yes      |
 | `DRIVER_OPTS_OPTIONS`                | Docker volume driver options.                                            | bind                                                                             | Yes      |
 | `MZINGA_DOCKER_COMPOSE_REPLICAS`     | Number of replicas for Docker Compose services.                          | 0                                                                                | No       |
-| `MONGO_HOST`\*\*                     | Hostname or IP for MongoDB (used in some healthchecks).                  | 192.168.1.233                                                                    | Yes      |
 
 \*`REDIS_URI` and `PAYLOAD_PUBLIC_ENABLE_CACHE_PLUGIN` are only required if you want to enable Redis caching.
-\*\*`MONGO_HOST`'s value changes everytime you connect to a new network. This is the IP address of your machine on the local network. To get its value, open a terminal and run `ifconfig | grep 192`, the IP after inet is your machine's IP.
 
 > **Note:** If you use Docker Compose, these variables are automatically picked up from `.env`.
 
@@ -132,7 +130,6 @@ Use this method to ensure your data (database, uploads, etc.) is saved permanent
     ```
     Also ensure the other required variables are set:
     ```sh
-    MONGO_HOST=[your_192_ip_address]
     DRIVER_OPTS_TYPE="none"
     DRIVER_OPTS_OPTIONS="bind"
     ```
@@ -151,7 +148,6 @@ Use this method for quick tests where you do not need to keep your data.
 1.  **Ensure your `.env` file is configured as follows:**
 
     ```sh
-    MONGO_HOST=[your_192_ip_address]
     DRIVER_OPTS_TYPE="none"
     DRIVER_OPTS_OPTIONS="bind"
     DRIVER_OPTS_DEVICE=/tmp

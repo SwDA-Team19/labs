@@ -7,13 +7,12 @@ services:
       - |
         apk update && apk add openssl
         echo "Generating replica key..."
-        openssl rand -base64 756 > /data/custom.replica.key
-        chmod 400 /data/custom.replica.key
-        chown 999:999 /data/custom.replica.key
-        sleep 30
+        openssl rand -base64 756 > /data/db/custom.replica.key
+        chmod 400 /data/db/custom.replica.key
+        chown 999:999 /data/db/custom.replica.key
         echo "Replica key generated"
     volumes:
-      - mongodb_data:/data
+      - mongodb_data:/data/db
     deploy:
       restart_policy:
         condition: no
@@ -25,9 +24,12 @@ services:
     volumes:
       - mzinga_data:/app/${TENANT:-local}
     depends_on:
-      - database
-      - messagebus
-      - cache
+      database:
+        condition: service_healthy
+      messagebus:
+        condition: service_healthy
+      cache:
+        condition: service_started
     environment:
       - MONGODB_URI=mongodb://${MONGO_ROOTUSER:-admin}:${MONGO_ROOTPASSWORD:-admin}@database:${MONGO_PORT:-27017}/app?authSource=admin&directConnection=true
       - PAYLOAD_SECRET=${PAYLOAD_SECRET:-secret_key}
@@ -58,7 +60,8 @@ services:
   database:
     image: percona/percona-server-mongodb:8.0.20-8
     depends_on:
-      - replica_key
+      replica_key:
+        condition: service_completed_successfully
     ports:
       - ${MONGO_PORT:-27017}:27017
     volumes:
@@ -83,7 +86,7 @@ services:
         max_attempts: 3
         window: 120s
     healthcheck:
-      test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'rs0',members:[{_id:0,host:'$MONGO_HOST:${MONGO_PORT:-27017}'}]}) }" | mongosh -u ${MONGO_ROOTUSER:-admin} -p ${MONGO_ROOTPASSWORD:-admin} --quiet
+      test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'rs0',members:[{_id:0,host:'database:27017'}]}) }" | mongosh -u ${MONGO_ROOTUSER:-admin} -p ${MONGO_ROOTPASSWORD:-admin} --quiet
       interval: 5s
       timeout: 30s
       start_period: 0s
