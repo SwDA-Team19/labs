@@ -58,27 +58,39 @@ def auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+def api_request(token: str, method: str, path: str, **kwargs):
+    url = f"{MZINGA_URL}{path}"
+    resp = requests.request(method, url, headers=auth_headers(token), **kwargs)
+    if resp.status_code == 401:
+        log.warning("Token expired, re-authenticating")
+        token = login()
+        resp = requests.request(method, url, headers=auth_headers(token), **kwargs)
+    resp.raise_for_status()
+    return resp, token
+
+
 # ---------------------------------------------------------------------------
 # REST API helpers
 # ---------------------------------------------------------------------------
 
-def fetch_pending(token: str) -> list:
-    resp = requests.get(
-        f"{MZINGA_URL}/api/communications",
+def fetch_pending(token: str) -> tuple[list, str]:
+    resp, token = api_request(
+        token,
+        "GET",
+        "/api/communications",
         params={"where[status][equals]": "pending", "depth": 1},
-        headers=auth_headers(token),
     )
-    resp.raise_for_status()
-    return resp.json().get("docs", [])
+    return resp.json().get("docs", []), token
 
 
 def update_status(token: str, doc_id: str, status: str):
-    resp = requests.patch(
-        f"{MZINGA_URL}/api/communications/{doc_id}",
+    _, token = api_request(
+        token,
+        "PATCH",
+        f"/api/communications/{doc_id}",
         json={"status": status},
-        headers=auth_headers(token),
     )
-    resp.raise_for_status()
+    return token
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +187,7 @@ def send_email(to_addresses: list[str], subject: str, html: str,
 def process(token: str, doc: dict):
     doc_id = doc["id"]
     log.info(f"Processing communication {doc_id}")
-    update_status(token, doc_id, "processing")
+    token = update_status(token, doc_id, "processing")
     try:
         to_emails = extract_emails(doc.get("tos"))
         if not to_emails:
@@ -184,11 +196,12 @@ def process(token: str, doc: dict):
         bcc_emails = extract_emails(doc.get("bccs"))
         html = slate_to_html(doc.get("body") or [])
         send_email(to_emails, doc["subject"], html, cc_emails, bcc_emails)
-        update_status(token, doc_id, "sent")
+        token = update_status(token, doc_id, "sent")
         log.info(f"Communication {doc_id} sent successfully")
     except Exception as e:
         log.error(f"Failed to process communication {doc_id}: {e}")
-        update_status(token, doc_id, "failed")
+        token = update_status(token, doc_id, "failed")
+    return token
 
 
 # ---------------------------------------------------------------------------
@@ -200,18 +213,22 @@ def poll():
     log.info(f"Worker started. Polling every {POLL_INTERVAL}s")
     while True:
         try:
-            docs = fetch_pending(token)
+            docs, token = fetch_pending(token)
             for doc in docs:
-                process(token, doc)
+                token = process(token, doc)
             if not docs:
                 time.sleep(POLL_INTERVAL)
         except requests.HTTPError as e:
-            if e.response.status_code == 401:
-                log.warning("Token expired, re-authenticating")
-                token = login()
+            if e.response is not None and e.response.status_code == 404:
+                log.error(
+                    "MZinga returned 404 for the communications API. "
+                    "Check that the logged-in user has the admin role and that "
+                    "the Communications collection is enabled."
+                )
+                log.error(f"Response body: {e.response.text}")
             else:
                 log.error(f"HTTP error: {e}")
-                time.sleep(POLL_INTERVAL)
+            time.sleep(POLL_INTERVAL)
         except KeyboardInterrupt:
             log.info("Worker stopped.")
             break
