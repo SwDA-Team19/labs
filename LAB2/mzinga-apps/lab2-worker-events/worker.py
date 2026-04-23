@@ -233,7 +233,7 @@ async def main():
 
         async with queue.iterator() as messages:
             async for message in messages:
-                async with message.process(requeue_on_timeout=True):
+                async with message.process(requeue=True):
                     try:
                         body = json.loads(message.body.decode())
                         event_data = body.get("data", {})
