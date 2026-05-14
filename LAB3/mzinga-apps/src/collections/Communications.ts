@@ -29,21 +29,32 @@ const Communications: CollectionConfig = {
     enableRichTextRelationship: false,
   },
   hooks: {
+    beforeChange: [
+      async ({ data, operation }) => {
+        // Stamp the document before it is created so the REST poller can
+        // discover it immediately without relying on a follow-up update.
+        if (
+          process.env.COMMUNICATIONS_EXTERNAL_WORKER === "true" &&
+          operation === "create"
+        ) {
+          return {
+            ...data,
+            status: "pending",
+          };
+        }
+
+        return data;
+      },
+    ],
     afterChange: [
       async ({ doc, operation }) => {
         // --- Lab 1: Branch by Abstraction via feature flag ---
         // When COMMUNICATIONS_EXTERNAL_WORKER=true the Python worker handles
-        // email sending.  The hook just marks the document pending and returns.
+        // email sending. The status is stamped in beforeChange so the create
+        // is persisted as pending without a second write.
         // Setting the flag to false (or leaving it unset) restores the original
         // synchronous in-process behaviour so the change is fully reversible.
         if (process.env.COMMUNICATIONS_EXTERNAL_WORKER === "true") {
-          if (operation === "create") {
-            await payload.update({
-              collection: Slugs.Communications,
-              id: doc.id,
-              data: { status: "pending" },
-            });
-          }
           return doc;
         }
 

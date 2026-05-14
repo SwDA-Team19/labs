@@ -22,12 +22,15 @@ import os
 import time
 import smtplib
 import logging
+from pathlib import Path
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
 import requests
 
-load_dotenv()
+# Load the worker-local .env so running the script from the repo root still
+# picks up the correct MZinga credentials and SMTP settings.
+load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
