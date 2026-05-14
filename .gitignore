@@ -1,4 +1,9 @@
 .DS_Store
 node_modules
 .venv
-__pycache__/
+__pycache__
+*.pyc
+*.pyo
+.env
+.pytest_cache
+.mypy_cache
